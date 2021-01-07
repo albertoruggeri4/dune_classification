@@ -1,0 +1,262 @@
+setwd("C:/SAL2017_Ortofoto_Multispectral")
+
+
+library(raster)
+library(tidyverse)
+library(sf)
+library(rpart)
+library(rpart.plot)
+library(rasterVis)
+library(mapedit)
+library(mapview)
+library(caret)
+library(forcats)
+library(RStoolbox)
+library(ggplot2)
+library(rgdal)
+
+
+
+ortofoto1 <- brick("SAL2017_CasalBorsetti_Ortofoto.tif")
+
+plot(ortofoto1)
+
+# cambio nomi delle bande 
+names(ortofoto1) <- c('band1','band2','band3','band4','band5','band6','band7','band8','band9','band10','band11','band12')
+names(ortofoto1)
+
+
+
+# plottaggio 'True Color' e 'False Color'
+
+par(mfrow=c(1,2))
+
+par(col.axis="white",col.lab="white",tck=0)
+plotRGB(ortofoto1, r = 4, g = 3, b = 2, axes = TRUE, 
+        stretch = "lin", main = "True Color Composite")
+box(col="white")
+
+
+par(col.axis="white",col.lab="white",tck=0)
+plotRGB(ortofoto1, r=6, g=5, b=4, axes = TRUE, 
+        stretch = "lin", main = "False Color Composite")
+box(col="white")
+
+
+
+
+#####
+
+# UN ERRORE DI FONDO CREDO CHE SIA IL FATTO DI AVER LASCIATO I "NO DATA"
+# Ho provato a rimuoverli, ma ho avuto degli errori di memoria. Sto provando a risolvere questa prima questione
+
+#####
+
+###############################################        CODICE - Classificazione non supervisionata    ####################################################
+
+
+#####       Unsupervised clustering with kmeans #################################
+## https://www.rdocumentation.org/packages/RStoolbox/versions/0.2.6/topics/unsuperClass
+
+set.seed(42)
+ortof_uc <- unsuperClass(ortofoto1, nClasses = 4, output = "classes", clusterMap = TRUE)
+ortof_uc
+
+# plot classification
+ggR(ortof_uc$map, forceCat = TRUE, geom_raster = TRUE) +
+  scale_fill_viridis_d(name = "Cluster", option = "A") + MapTheme
+  
+
+
+#### UC with euclidean distance
+
+set.seed(42)
+ortof_ucd <- unsuperClass(ortofoto1,  nClasses = 4, output = "distances")
+ortof_ucd
+
+#plot classification
+ggR(ortof_ucd$map, layer = 1:4, geom_raster = TRUE) +
+  scale_fill_viridis_c(name = "Distance", direction = -1) + MapTheme
+  
+  
+#### Spectral angle mapper
+
+classCentroids <- ortof_ucd$model$centers
+
+ortof_sa <- sam(ortofoto1, em = classCentroids, angles = TRUE)
+ortof_sa
+
+#plot classification
+ggR(ortof_sa, 1:4, geom_raster = TRUE) +
+  scale_fill_viridis_c(name = "Spectral angle", direction = -1) + MapTheme
+
+ 
+ 
+ 
+ 
+ #################### Inizio Classificazione supervisionata #########
+ 
+##################################  COSTRUZIONE TRAINING SET ######################################################################à
+
+# create training points in mapview tramite la funzione editMap()
+
+#ad ogni iterazione, si aprirà openstreetmap sul browser, disegnare i poligoni del training set della classe, ed infine effettuare l'assegnazione
+
+train <- viewRGB(ortofoto1, r = 6, g = 5, b = 4) %>% editMap()
+vegetation <- train$finished$geometry %>% st_sf() %>% mutate(class = "vegetation", id = 1)
+
+
+train <- viewRGB(ortofoto1, r = 6, g = 5, b = 4) %>% editMap()
+dune <- train$finished$geometry %>% st_sf() %>% mutate(class = "dune", id = 2)
+
+
+train <- viewRGB(ortofoto1, r = 6, g = 5, b = 4) %>% editMap()
+sand <- train$finished$geometry %>% st_sf() %>% mutate(class = "sand", id = 3)
+
+train <- viewRGB(ortofoto1, r = 6, g = 5, b = 4) %>% editMap()
+water <- train$finished$geometry %>% st_sf() %>% mutate(class = "water", id = 4)
+
+training_set <- rbind(vegetation, dune, sand, water)
+
+write_sf(training_set, "trainingSet.shp", driver = "ESRI shapefile", getwd())
+training_set <- st_read("trainingSet.shp")
+
+
+#### effettuare cambio sistema di riferimento del training set per omologarlo al SR del raster [in questo caso, avendo avuto un errore su R, l'ho effettuato su QGIS per velocizzare la procedura e poi l'ho importato]
+
+
+
+##################Caricare lo shape file del TRAINING SET con sistema di riferimento uguale al raster  [rgdal]  ###################################
+
+training_sh <- readOGR("casalborsetti_trainingPoints_SR.shp")
+
+#estrazione data frame
+
+df <- raster::extract(ortofoto1, training_sh, weights=FALSE, fun= max) %>% round()
+
+
+#######
+
+
+
+###############################################################   Costruzione firma spettrale ############################################################################
+####TEST 1
+https://rpubs.com/daniballari/RSwithR
+
+
+ms <- matrix(NA, nrow =length(unique(training_sh$id)), ncol= nlayers(ortofoto1))
+
+for (i in unique(training_sh$id)){
+ x <- df[training_sh$id==i,]
+ ms[i,] <- colMeans(x)
+}
+
+
+# Specify the row- and column names
+rownames(ms) <- unique(training_sh$class)
+colnames(ms) <- names(ortofoto1)
+
+
+
+# We will create a vector of color for the land use land cover classes and will resuse it for other pl
+mycolor <- c('cyan', 'darkgreen', 'yellow', 'burlywood', 'darkred', 'darkgray', 'blue', 'lightgreen')
+
+# First create an empty plot
+plot(1, ylim=c(0, 300), xlim = c(1,10), xlab = "Bands", ylab = "Reflectance", xaxt='n')
+
+# Custom X-axis
+axis(1, at=1:10, lab=colnames(ms))
+# add the other spectra
+for (i in 1:nrow(ms)){
+ lines(ms[i,], type = "o", lwd = 3, lty = 1, col = mycolor[i])
+ }
+title(main="Spectral Profile", font.main = 2)# Title
+legend("topleft", rownames(ms), cex=0.8, col=mycolor, lty = 1, lwd =3, bty = "n")# Finally the legend
+
+
+########################################################################################################################
+####TEST 2
+#########estrazione profilo spettrale
+profiles <- df %>% 
+  as.data.frame() %>% 
+  cbind(., training_sh$id) %>% 
+  rename(id = "training_sh$id") %>% 
+  na.omit() %>% 
+  group_by(id) %>% 
+  summarise(band1 = mean(band1),
+            band2 = mean(band2),
+            band3 = mean(band3),
+            band4 = mean(band4),
+            band5 = mean(band5),
+            band6 = mean(band6),
+            band7 = mean(band7),
+            band8 = mean(band8),
+            band9 = mean(band9),
+            band10 = mean(band10),
+            band11 = mean(band11)) %>% 
+  mutate(id = case_when(id == 1 ~ "vegetation",
+                        id == 2 ~ "dune",
+                        id == 3 ~ "sand",
+                        id == 4 ~ "water")) %>% 
+  as.data.frame()
+
+head(profiles)
+
+################### STEP 2
+
+profiles %>% 
+  select(-id) %>% 
+  gather() %>% 
+  mutate(class = rep(c("vegetation", "dune", "sand", "water"), 11)) %>% 
+  ggplot(data = ., aes(x = fct_relevel(as.factor(key),
+                                       levels = c("band1", "band2", "band3", "band4","band5",
+                                                  "band6", "band7", "band8", "band9", "band10",
+                                                  "band11")), y = value, 
+                           group=class, color = class)) +
+  geom_point(size = 2.5) +
+  geom_line(lwd = 1.2) +
+  scale_color_manual(values=c('cyan', 'burlywood', 'darkgreen', 'blue')) +
+  labs(title = "Spectral Profile",
+       x = "Bands",
+       y = "Reflectance") +
+  #scale_y_continuous(limits=c(0, 255)) +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_line(color = "gray", size = 0.5),
+        panel.grid.minor = element_line(color = "gray", size = 0.5),
+        axis.ticks = element_blank())
+#
+
+#### STEP 3 -- DENSITA' ###
+
+#Un altro modo per valutare se i profili spettrali sono univoci è tracciare la densità dei valori di riflettanza per ciascun gruppo. Se i profili spettrali variano, gli istogrammi di densità dovrebbero avere una piccola sovrapposizione.
+#Guardando i valori medi di riflettanza per ogni gruppo, si potrà anche illustrare se, in media, i punti di campionamento sono rappresentativi di diverse parti dello spettro.
+
+
+profiles %>% 
+  select(-id) %>% 
+  gather() %>% 
+  mutate(class = rep(c("vegetation", "dune", "sand", "water"), 11)) %>% 
+  ggplot(., aes(x=value, group=as.factor(class), fill=as.factor(class))) + 
+  geom_density(alpha = 0.75) + 
+  geom_vline(data = . %>% group_by(class) %>% summarise(grp.mean = mean(value)),
+             aes(xintercept=grp.mean, color = class), linetype="dashed", size=1) +
+  scale_fill_manual(values=c('cyan', 'burlywood', 'darkgreen', 'blue'),
+                    name = "class") +
+  scale_color_manual(values=c("gray", "#CD853F", "#3CB371", "#33CEFF")) +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_line(color = "gray", size = 0.5),
+        panel.grid.minor = element_line(color = "gray", size = 0.5),
+        axis.ticks = element_blank()) +
+  labs(x = "Reflectance Value",
+       y = "Density",
+       title = "Density histograms of spectral profiles",
+       subtitle = "Vertical lines represent mean group reflectance values")
+       
+       
+       
+#####
+
+## Infine, dopo aver creato questo training set, volevo provare ad utilizzare qualche algoritmo di classificazione supervisionata.
+
+
+######################################################################################################
