@@ -1,4 +1,6 @@
-Tutorial from http://amsantac.co/blog/en/2015/11/28/classification-r.html
+#Tutorial from http://amsantac.co/blog/en/2015/11/28/classification-r.html
+## applicato allla classificazione della duna
+
 
 setwd("C:/SAL2017_Ortofoto_Multispectral")
 
