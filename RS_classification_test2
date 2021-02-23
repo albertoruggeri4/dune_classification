@@ -1,5 +1,5 @@
 #Tutorial from [Springer Geography] Courage Kamusoko - Remote Sensing Image Classification in R (2019, Springer Singapore)  
- # applicato allla classificazione della duna
+ # applicato alla classificazione della duna
 
 
 setwd("C:/SAL2017_Ortofoto_Multispectral")
@@ -59,8 +59,7 @@ head(ta)
 
 #Let’s compute the mean reflectance (mr) values for each land use/
 #cover class and each Landsat 5 TM band. We are going to use the
-#aggregate() function to aggregate the training areas (ta) and the land
-#use/cover class names contained in “ta_data” object.
+#aggregate() function to aggregate the training areas (ta) and the names contained in “ta_data” object.
 
 mr <- aggregate(ta, list(ta_data$class), mean, na.rm= TRUE)
 
