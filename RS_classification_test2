@@ -1,3 +1,7 @@
+#Tutorial from [Springer Geography] Courage Kamusoko - Remote Sensing Image Classification in R (2019, Springer Singapore)  
+ # applicato allla classificazione della duna
+
+
 setwd("C:/SAL2017_Ortofoto_Multispectral")
 
 library(sp)
