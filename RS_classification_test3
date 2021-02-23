@@ -1,0 +1,50 @@
+Tutorial from http://amsantac.co/blog/en/2015/11/28/classification-r.html
+
+setwd("C:/SAL2017_Ortofoto_Multispectral")
+
+
+library(rgdal)
+library(raster)
+library(caret)  #https://topepo.github.io/caret/model-training-and-tuning.html
+
+
+img <- brick('SAL2017_CasalBorsetti_Ortofoto.tif')
+
+names(img) <- c('B1','B2','B3','B4','B5','B6','B7','B8','B9','B10','B11','B12')
+
+
+trainData <- shapefile ("C:/SAL2017_Ortofoto_Multispectral/casalborsetti_trainingPoints_SR")
+responseCol <- "class"
+
+dfAll = data.frame(matrix(vector(), nrow = 0, ncol = length(names(img)) + 1))   
+for (i in 1:length(unique(trainData[[responseCol]]))){
+  category <- unique(trainData[[responseCol]])[i]
+  categorymap <- trainData[trainData[[responseCol]] == category,]
+  dataSet <- extract(img, categorymap)
+  if(is(trainData, "SpatialPointsDataFrame")){
+    dataSet <- cbind(dataSet, class = as.numeric(rep(category, nrow(dataSet))))
+    dfAll <- rbind(dfAll, dataSet[complete.cases(dataSet),])
+  }
+  if(is(trainData, "SpatialPolygonsDataFrame")){
+    dataSet <- dataSet[!unlist(lapply(dataSet, is.null))]
+    dataSet <- lapply(dataSet, function(x){cbind(x, class = as.numeric(rep(category, nrow(x))))})
+    df <- do.call("rbind", dataSet)
+    dfAll <- rbind(dfAll, df)
+  }
+}
+
+nsamples <- 1000
+sdfAll <- dfAll[sample(1:nrow(dfAll), nsamples), ]
+
+
+############# ERROR
+modFit_rf <- train(as.factor(class) ~ B3 + B4 + B5, method = "rf", data = sdfAll)
+
+## Error in na.fail.default(list(`as.factor(class)` = c(NA_integer_, NA_integer_,  : 
+###  missing values in object...... Ho provato a rimuovere i possibili NA aggiungendo all'espressione " na.action=na.exclude"
+## ma risulta un'ultriore errore: Error: Every row has at least one missing value were found
+
+
+beginCluster()
+preds_rf <- clusterR(img, raster::predict, args = list(model = modFit_rf))
+endCluster()
