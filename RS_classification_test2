@@ -1,0 +1,148 @@
+setwd("C:/SAL2017_Ortofoto_Multispectral")
+
+library(sp)
+library(rgdal)
+library(raster)
+library(reshape)
+library(grid)
+library(gridExtra)
+library(RStoolbox)
+library(caret)
+library(rasterVis)
+library(corrplot)
+library(doParallel)
+library(NeuralNetTools)
+
+library(tidyverse)
+library(sf)
+library(rpart)
+library(rpart.plot)
+library(mapedit)
+library(mapview)
+library(forcats)
+library(ggplot2)
+
+
+
+ortofoto1 <- brick("SAL2017_CasalBorsetti_Ortofoto.tif")
+
+ortofoto <- stack(ortofoto1)
+ortofoto
+
+names(ortofoto) <- c('band1','band2','band3','band4','band5','band6','band7','band8','band9','band10','band11','band12')
+names(ortofoto)
+
+###
+
+ortofoto <- dropLayer(ortofoto, c(7:13))
+
+###
+
+ortofotoRGB <- plotRGB(ortofoto, r=2, g=3, b=4, strech="lin")
+
+ta_data <- readOGR (getwd(), "casalborsetti_trainingPoints_SR")
+
+
+rownames(ta_data) <- ta_data[1,]
+ta_data <- ta_data[1]
+ta_data
+
+
+## estrazione spectral profile del tr dall'ortofoto
+
+ta <- as.data.frame(extract(ortofoto, ta_data))  #ERROR Error in (function (..., row.names = NULL, check.rows = FALSE, check.names = TRUE,  : arguments imply differing number of rows:
+
+ta <-raster::extract(ortofoto, ta_data, weights=FALSE, fun= max) %>% round() #OK
+
+head(ta)
+
+
+###############
+
+#Let’s compute the mean reflectance (mr) values for each land use/
+#cover class and each Landsat 5 TM band. We are going to use the
+#aggregate() function to aggregate the training areas (ta) and the land
+#use/cover class names contained in “ta_data” object.
+
+mr <- aggregate(ta, list(ta_data$class), mean, na.rm= TRUE)
+
+
+#rimozione prima colonna
+rownames(mr) <- mr[,1]
+mr <- mr[,-1]
+mr
+
+
+
+
+mycolor <- c('yellow','grey','green3','red','blue3')
+
+#Next, let’s transform the data frame to a matrix.
+mr <- as.matrix(mr)
+
+#####  ERROR, skip test 2
+#We can now create a spectral profile graph. In order to do that, we
+#need first to create an empty graph using the command below.
+
+plot(0, ylim=c(0.1, 1.0), xlim = c(1,12), type='n', xlab="Bands", ylab="Reflectance")
+
+
+#Next, add the different land use/cover classes, and title as shown in
+#the command below.
+
+for (i in 1:nrow(mr)){lines(mr[i,], type = "l", lwd = 3, lty = 1,col = mycolor[i])} ####ERROR
+
+title(main="Spectral Profile from ortophoto", font.main = 2)
+###
+
+############### TEST 2
+mycolor <- c('cyan', 'darkgreen', 'yellow', 'burlywood', 'darkred', 'darkgray', 'blue', 'lightgreen')
+
+# First create an empty plot
+plot(1, ylim=c(0, 300), xlim = c(1,7), xlab = "Bands", ylab = "Reflectance", xaxt='n')
+
+# Custom X-axis
+axis(1, at=1:7, lab=colnames(mr))
+
+# add the other spectra
+for (i in 1:nrow(mr)){
+ lines(mr[i,], type = "o", lwd = 3, lty = 1, col = mycolor[i])}
+ 
+title(main="Spectral Profile from ortophoto", font.main = 2)
+
+#Finally, we add the legend. This will generate the spectral profile
+
+rownames(mr) <- unique(ta_data$class)
+legend("topleft", rownames(mr),cex=0.8, col=mycolor, lty=1, lwd=3, bty="n") 
+######
+
+
+####STEP 5    ######################### ERROR
+'''
+In step 4, we used the “ta” data frame to compute mean spectral
+reflectance and then created a spectral profile. We now need to create
+a new data frame that contains labeled training points with all
+reflectance values for each land use/cover class. Use the data.frame()
+function to create the “ta_data@data”. Note that the “ta_data@data”
+object has the slots for the land use/cover class names and spectral
+reflectance values. The @ is a special operator for accessing the
+objects stored in another object.
+'''
+
+ta_data@data=data.frame(ta_data@data,ta[match(rowname(ta_data@data), rownames(ta)),])
+
+#After that, let’s take a look at the structure of the whole training
+#data set using str() function. This gives us an overview of the data set.
+
+str(ta_data@data)
+################################
+
+
+
+#STEP 6
+hre_seed<- 27
+set.seed(hre_seed)
+
+inTraining <- createDataPartition(ta_data@ta_data$class,p = .80, list = FALSE)
+training <- ta_data@data[ inTraining,]
+testing <- ta_data@data[-inTraining,]
