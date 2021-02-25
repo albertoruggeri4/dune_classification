@@ -28,6 +28,7 @@ library(ggplot2)
 
 
 
+### Caricamento Ortofofoto
 ortofoto1 <- brick("SAL2017_CasalBorsetti_Ortofoto.tif")
 
 ortofoto <- stack(ortofoto1)
@@ -36,14 +37,15 @@ ortofoto
 names(ortofoto) <- c('band1','band2','band3','band4','band5','band6','band7','band8','band9','band10','band11','band12')
 names(ortofoto)
 
-###
+### Rimozione bande (7,)
 
 ortofoto <- dropLayer(ortofoto, c(7:13))
 
-###
+### Plottaggio in RGB
 
 ortofotoRGB <- plotRGB(ortofoto, r=2, g=3, b=4, strech="lin")
 
+### Caricamento shapefile
 ta_data <- readOGR (getwd(), "casalborsetti_trainingPoints_SR")
 
 
@@ -57,8 +59,8 @@ head(ta)
 
 ###############
 
-#Let’s compute the mean reflectance (mr) values for each land use/
-#cover class and each Landsat 5 TM band. We are going to use the
+#Let’s compute the mean reflectance (mr) values for each 
+# class and each bands. We are going to use the
 #aggregate() function to aggregate the training areas (ta) and the names contained in “ta_data” object.
 
 mr <- aggregate(ta, list(ta_data$class), mean, na.rm= TRUE)
@@ -70,16 +72,13 @@ mr <- mr[,-1]
 mr
 
 
-
-
-mycolor <- c('yellow','grey','green3','red','blue3')
-
 #Next, let’s transform the data frame to a matrix.
 mr <- as.matrix(mr)
 
 
 
-###############
+###############  Costruzione firma spettrale
+
 mycolor <- c('cyan', 'darkgreen', 'yellow', 'burlywood', 'darkred', 'darkgray', 'blue', 'lightgreen')
 
 # First create an empty plot
@@ -101,7 +100,9 @@ legend("topleft", rownames(mr),cex=0.8, col=mycolor, lty=1, lwd=3, bty="n")
 ######
 
 
-####STEP 5    ######################### ERROR
+####STEP 5   
+
+#Create a data frame with labeled training points containing all reflectance values
 '''
 In step 4, we used the “ta” data frame to compute mean spectral
 reflectance and then created a spectral profile. We now need to create
@@ -119,7 +120,7 @@ ta_data@data=data.frame(ta_data@data,ta[match(rowname(ta_data@data), rownames(ta
 #data set using str() function. This gives us an overview of the data set.
 
 str(ta_data@data)
-################################
+###ERROR #################   Ottengo solamente NA nel training data set
 
 
 
