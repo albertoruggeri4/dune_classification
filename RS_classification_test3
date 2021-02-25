@@ -54,3 +54,29 @@ preds_rf <- clusterR(img, raster::predict, args = list(model = modFit_rf))
 endCluster()
 
 plot(preds_rf)
+
+
+##Classificazione - knn
+modFit_knn <- train(as.factor(class) ~ B3 + B4 + B5, method = "knn", data = sdfAll)
+
+beginCuster()
+preds_knn <- clusterR(img, raster::predict, args = list(model = modFit_knn))
+endCluster()
+plot(preds_knn)
+
+##Classificazione - svmLinear
+modFit_svm <- train(as.factor(class) ~ B3 + B4 + B5, method = "svmLinear", data = sdfAll)
+
+beginCuster()
+preds_svmLinear <- clusterR(img, raster::predict, args = list(model = modFit_svmLinear))
+endCluster()
+plot(preds_svmLinear)
+
+##Classificazione - blackboost
+modFit_bb <- train(as.factor(class) ~ B3 + B4 + B5, method = "blackboost", data = sdfAll)
+
+beginCuster()
+preds_bb <- clusterR(img, raster::predict, args = list(model = modFit_bb))
+endCluster()
+plot(preds_bb)
+
