@@ -37,6 +37,14 @@ for (i in 1:length(unique(trainData[[responseCol]]))){
   }
 }
 
+##WARNINGS
+#After this process i have about 50 warnings:
+# The first one is about  In .local(x, y, ...) : Transforming SpatialPolygons to the CRS of the Raster
+
+# The others 49 are about the production of a NA value for coercion: In cbind(x, class = as.numeric(rep(category, nrow(x))))
+
+
+
 
 # Crazione di un subset
 nsamples <- 1000
@@ -48,8 +56,7 @@ sdfAll <- dfAll[sample(1:nrow(dfAll), nsamples), ]
 modFit_rf <- train(as.factor(class) ~ B3 + B4 + B5, method = "rf", data = sdfAll)
 
 ## Error in na.fail.default(list(`as.factor(class)` = c(NA_integer_, NA_integer_,  : 
-###  missing values in object...... Ho provato a rimuovere i possibili NA aggiungendo all'espressione " na.action=na.exclude"
-## ma risulta un'ultriore errore: Error: Every row has at least one missing value were found
+###  missing values in object
 
 
 beginCluster()
