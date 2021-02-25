@@ -49,6 +49,8 @@ sdfAll <- dfAll[sample(1:nrow(dfAll), nsamples), ]
 
 modFit_rf <- train(as.factor(class) ~ B3 + B4 + B5, method = "rf", data = sdfAll)
 
+#system.time()
+
 beginCluster()
 preds_rf <- clusterR(img, raster::predict, args = list(model = modFit_rf))
 endCluster()
