@@ -10,14 +10,16 @@ library(raster)
 library(caret)  #https://topepo.github.io/caret/model-training-and-tuning.html
 
 
+#### Caricamento Ortofoto
 img <- brick('SAL2017_CasalBorsetti_Ortofoto.tif')
 
 names(img) <- c('B1','B2','B3','B4','B5','B6','B7','B8','B9','B10','B11','B12')
 
-
+### Caricamento shapefile 
 trainData <- shapefile ("C:/SAL2017_Ortofoto_Multispectral/casalborsetti_trainingPoints_SR")
 responseCol <- "class"
 
+###  estrazione training pixels values
 dfAll = data.frame(matrix(vector(), nrow = 0, ncol = length(names(img)) + 1))   
 for (i in 1:length(unique(trainData[[responseCol]]))){
   category <- unique(trainData[[responseCol]])[i]
@@ -35,10 +37,13 @@ for (i in 1:length(unique(trainData[[responseCol]]))){
   }
 }
 
+
+# Crazione di un subset
 nsamples <- 1000
 sdfAll <- dfAll[sample(1:nrow(dfAll), nsamples), ]
 
 
+### Classificazione RF - random forest
 ############# ERROR
 modFit_rf <- train(as.factor(class) ~ B3 + B4 + B5, method = "rf", data = sdfAll)
 
