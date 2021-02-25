@@ -1,6 +1,7 @@
 #Tutorial from http://amsantac.co/blog/en/2015/11/28/classification-r.html
 ## applicato allla classificazione della duna
 
+#### ERRORE RISOLTO!!
 
 setwd("C:/SAL2017_Ortofoto_Multispectral")
 
@@ -17,7 +18,7 @@ names(img) <- c('B1','B2','B3','B4','B5','B6','B7','B8','B9','B10','B11','B12')
 
 ### Caricamento shapefile 
 trainData <- shapefile ("C:/SAL2017_Ortofoto_Multispectral/casalborsetti_trainingPoints_SR")
-responseCol <- "class"
+responseCol <- "id"
 
 ###  estrazione training pixels values
 dfAll = data.frame(matrix(vector(), nrow = 0, ncol = length(names(img)) + 1))   
@@ -37,13 +38,6 @@ for (i in 1:length(unique(trainData[[responseCol]]))){
   }
 }
 
-##WARNINGS
-#After this process i have about 50 warnings:
-# The first one is about  In .local(x, y, ...) : Transforming SpatialPolygons to the CRS of the Raster
-
-# The others 49 are about the production of a NA value for coercion: In cbind(x, class = as.numeric(rep(category, nrow(x))))
-
-
 
 
 # Crazione di un subset
@@ -52,13 +46,11 @@ sdfAll <- dfAll[sample(1:nrow(dfAll), nsamples), ]
 
 
 ### Classificazione RF - random forest
-############# ERROR
+
 modFit_rf <- train(as.factor(class) ~ B3 + B4 + B5, method = "rf", data = sdfAll)
-
-## Error in na.fail.default(list(`as.factor(class)` = c(NA_integer_, NA_integer_,  : 
-###  missing values in object
-
 
 beginCluster()
 preds_rf <- clusterR(img, raster::predict, args = list(model = modFit_rf))
 endCluster()
+
+plot(preds_rf)
