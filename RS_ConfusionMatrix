@@ -1,0 +1,51 @@
+
+
+
+setwd("C:/...")
+
+
+### Codice ripreso da questo tutorial : blogs.fu-berlin.de/reseda/accuracy-statistics-in-r/
+
+library(raster)
+
+#caricamento immagine classificata
+img.classified <- raster("rf_classification_14_clip.tif")
+
+#Caricamento shapefile. Personalmente ho estrapolato dal TS, precedentemente costruito, i punti che mi sono sembrati più validi consultando la mappa cartacea
+
+shp.train <- shapefile("trainingPoints_5cl_TRAINING.shp")
+shp.valid <- shapefile("trainingPoints_5cl_TESTING.shp")
+
+## Etichette delle classi assegnate in fase di costruzione del TS alle clasis 
+reference <- as.factor(shp.valid$id)
+reference
+
+
+## Estrazione dei valori dell'immagine classificata in corrispondenza delle coordinate dei punti validi
+predicted <- as.factor(extract(img.classified, shp.valid))
+predicted
+
+
+#Costruzione matrice
+accmat <- table("pred" = predicted, "ref" = reference)
+accmat
+
+# Accuratezza utente
+UA <- diag(accmat) / rowSums(accmat) * 100
+UA
+
+# Accuratezza produttore
+PA <- diag(accmat) / colSums(accmat) * 100
+PA
+
+# Accuratezza globale
+OA <- sum(diag(accmat)) / sum(accmat) * 100
+OA
+
+
+#######  In questo caso, alla fine in realtà viene fatta un'analisi unicamente sui valori dell'immagine classificata nelle coordinate dei punti considerati come verità a terra.
+#### Su questo modello ho provato ad effettuare un'analisi su tutta l'intera immagine con scarsi risultati.
+
+# Come posso valutare l'accuratezza delle classificazioni fatte?
+
+
