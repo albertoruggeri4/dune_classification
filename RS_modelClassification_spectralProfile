@@ -1,0 +1,235 @@
+#Tutorial http://amsantac.co/blog/en/2015/11/28/classification-r.html
+## applicato allla classificazione della duna
+
+
+setwd("C:/...")
+
+
+library(rgdal)
+library(raster)
+library(caret)  #https://topepo.github.io/caret/model-training-and-tuning.html
+
+library(sf)
+library(rpart)
+library(rpart.plot)
+library(rasterVis)
+library(mapedit)
+library(mapview)
+library(dplyr)
+
+
+
+#Caricamento immagini
+
+##ortophoto 2017-  12 bands
+img17 <- brick('Orto_multisp_2017_cl.tif')
+
+names(img17) <- c('B1','B2','B3','B4','B5','B6','B7','B8','B9','B10','B11','B12')
+
+
+#Ortofoto 2014 - 3 bands
+img14 <- brick('Orto_2014_cl.tif')
+
+names(img14) <- c('B1','B2','B3')
+
+#World VIew 2011 - 8 bands
+img11 <- brick('WV_2011_cl.tif')
+
+
+names(img11)<-c('B1','B2','B3','B4','B5','B6','B7','B8')
+
+
+
+#Costruzione training site con editmap()
+### Training points
+points <- viewRGB(img14, r = 1, g = 2, b = 3) %>% editMap()
+CSAF <- points$finished$geometry %>% st_sf() %>% mutate(class = "CSAF", id = 1)
+GD <- points$finished$geometry %>% st_sf() %>% mutate(class = "GD", id = 2)
+MG <- points$finished$geometry %>% st_sf() %>% mutate(class = "MG", id = 3)
+AGAM <- points$finished$geometry %>% st_sf() %>% mutate(class = "AGAM", id = 4)
+BSCA <- points$finished$geometry %>% st_sf() %>% mutate(class = "BSCA", id = 5)
+
+training_points <- rbind(CSAF, GD, MG, AGAM, BSCA)
+write_sf(training_points, "trainingPoints5.shp", driver = "ESRI shapefile", getwd())
+training_points <- st_read("trainingPoints5.shp")
+
+training_points <- as(training_points,'Spatial')
+
+###training_points <-shapefile ("C:/Presentazione_16_03/trainingPoints_5cl.shp")
+
+
+
+## Estrazione valori px del training site, in questo caso per l'img del 2014
+responseCol <- "id"
+
+dfAll = data.frame(matrix(vector(), nrow = 0, ncol = length(names(img14)) + 1))   
+for (i in 1:length(unique(training_points[[responseCol]]))){
+  category <- unique(training_points[[responseCol]])[i]
+  categorymap <- training_points[training_points[[responseCol]] == category,]
+  dataSet <- extract(img14, categorymap)
+  if(is(training_points, "SpatialPointsDataFrame")){
+    dataSet <- cbind(dataSet, class = as.numeric(rep(category, nrow(dataSet))))
+    dfAll <- rbind(dfAll, dataSet[complete.cases(dataSet),])
+  }
+  if(is(training_points, "SpatialPolygonsDataFrame")){
+    dataSet <- dataSet[!unlist(lapply(dataSet, is.null))]
+    dataSet <- lapply(dataSet, function(x){cbind(x, class = as.numeric(rep(category, nrow(x))))})
+    df <- do.call("rbind", dataSet)
+    dfAll <- rbind(dfAll, df)
+  }
+}
+
+
+
+########   Algoritmi di classificazione - su B1-B2-B3
+
+
+
+#### random forest - 3 mins 
+modFit_rf <- train(as.factor(class) ~ B1 + B2 + B3, method = "rf", data =dfAll)
+
+###  Calcolo tempo d'esecuzione del processo
+#beginCluster()
+#system.time(preds_rf <- clusterR(img14, raster::predict, args = list(model = modFit_rf)))
+#endCluster()
+
+beginCluster()
+preds_rf <- clusterR(img14,raster::predict, args = list(model = modFit_rf))
+endCluster()
+
+plot(preds_rf)
+writeRaster(preds_rf,'rf_classification_14.tif', options =c('TFW=YES'), overwrite=TRUE)
+
+
+
+
+##knn - 5 mins
+modFit_knn <- train(as.factor(class) ~ B1 + B2 + B3, method = "knn", data =dfAll)
+
+#beginCluster()
+#system.time(preds_knn <- clusterR(img, raster::predict, args = list(model = modFit_knn)))
+#endCluster()
+
+beginCluster()
+preds_knn <- clusterR(img14, raster::predict, args = list(model = modFit_knn))
+endCluster()
+
+plot(preds_knn)
+writeRaster(preds_knn,'knn_classification_14.tif', options =c('TFW=YES'), overwrite=TRUE)
+
+
+
+
+##svmLinear - 10 mins
+modFit_svm <- train(as.factor(class) ~ B1 + B2 + B3, method = "svmLinear", data = dfAll)
+
+#beginCluster()
+#system.time(preds_svmLinear <- clusterR(img14, raster::predict, args = list(model = modFit_svm)))
+#endCluster()
+
+
+beginCluster()
+preds_svm <- clusterR(img14, raster::predict, args = list(model = modFit_svm))
+endCluster()
+
+plot(preds_svm)
+writeRaster(preds_svm,'svm_classification_14.tif', options =c('TFW=YES'), overwrite=TRUE)
+
+
+#### Poi ho ripetuto il procedimento per le altre immagini, riestrapolando il dfAll
+
+##################################################################
+
+## FIRME SPETTRALI --> Per ogni immagine ho riadattato il codice, andando a considerare il dfAll di riferimento ed il numero di bande 
+
+#dfAll
+
+profiles <- dfAll %>% 
+   as.data.frame() %>% 
+   cbind(., shp$id) %>% 
+   rename(id = "shp$id") %>% 
+   na.omit() %>% 
+   group_by(id) %>% 
+   summarise(B1 = mean(B1),
+             B2 = mean(B2),
+             B3 = mean(B3)) %>% 
+   mutate(id = case_when(id == 1 ~ "CSAF",
+                         id == 2 ~ "GD",
+                         id == 3 ~ "MD",
+                         id == 4 ~ "AGAM",
+                         id == 5 ~ "BSCA")) %>% 
+  as.data.frame()
+
+head(profiles)
+
+
+################### STEP 2
+
+#library(tidyr)
+#library(dplyr)
+
+profiles %>% 
+  select(-id) %>% 
+  gather() %>% 
+  mutate(class = rep(c("CSAF", "GD", "MD", "AGAM","BSCA"), 3)) %>% 
+  ggplot(data = ., aes(x = fct_relevel(as.factor(key),
+                                       levels = c("B1", "B2", "B3")),y = value, 
+                       group=class, color = class)) +
+  geom_point(size = 2.5) +
+  geom_line(lwd = 1.2) +
+  scale_color_manual(values=c('darkgoldenrod1','yellow1','darkgreen','chartreuse','darkorange')) +
+  labs(title = "Spectral Profile - 2014",
+       x = "Bands",
+       y = "Reflectance") +
+  #scale_y_continuous(limits=c(0, 255)) +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_line(color = "gray", size = 0.5),
+        panel.grid.minor = element_line(color = "gray", size = 0.5),
+        axis.ticks = element_blank())
+
+
+
+################
+
+######################### hist analysis
+
+
+cl_svm14 <- raster('svm_classification_14_clip.tif')
+cl_rf14 <- raster('rf_classification_14_clip.tif')
+
+cl_svm17 <- raster('svm_classification_17_clip.tif')
+cl_rf17 <- raster('rf_classification_17_clip.tif')
+
+
+cl_knn14 <- raster('knn_classification_14_clip.tif')
+cl_knn17 <- raster('knn_classification_17_clip.tif')
+
+
+#c('darkgoldenrod1','yellow1','darkgreen','chartreuse','darkorange'))
+
+par(mfrow=c(1,3))
+hist(cl_rf14, main ="RF - 2014", xlab ="CSAF - GD - MD - AGAM - BSCA", col= 'green')
+hist(cl_rf17, main ="RF - 2017", xlab ="CSAF - GD - MD - AGAM - BSCA", col= 'orange')
+
+hist(cl_svm14, main ="SVM - 2014",xlab ="CSAF - GD - MD - AGAM - BSCA", col= 'green')
+hist(cl_svm17, main ="SVM - 2017", xlab ="CSAF - GD - MD - AGAM - BSCA", col= 'orange')
+
+
+hist(cl_knn14, main ="KNN - 2014", xlab ="CSAF - GD - MD - AGAM - BSCA", col= 'green')
+hist(cl_knn17, main ="KNN - 2017", xlab ="CSAF - GD - MD - AGAM - BSCA", col= 'orange')
+
+
+## confronto 
+
+par(mfrow=c(2,1))
+hist(cl_svm14, main = "SVM 2014 - 2017", col=rgb(1,0,0,0.5), xlab = 'classes')
+hist(cl_svm17, col=rgb(0,0,1,0.5),add=T)
+
+hist(cl_rf14, main = "RF 2014 - 2017 ", col=rgb(1,0,0,0.5), xlab= 'classes')
+hist(cl_rf17, col=rgb(0,0,1,0.5),add=T)
+
+
+hist(cl_knn14,  main = "KNN  2014 - 2017 ", col=rgb(1,0,0,0.5), xlab= 'classes')
+hist(cl_knn17, col=rgb(0,0,1,0.5),add=T)
+
+
