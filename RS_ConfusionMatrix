@@ -11,12 +11,13 @@ library(raster)
 #caricamento immagine classificata
 img.classified <- raster("rf_classification_14_clip.tif")
 
-#Caricamento shapefile. Personalmente ho estrapolato dal TS, precedentemente costruito, i punti che mi sono sembrati più validi consultando la mappa cartacea
+#Caricamento shapefile. Personalmente ho estrapolato dal TS, precedentemente costruito, i punti che mi sono sembrati più validi consultando la mappa cartacea tramite QGIS
+#Accetto consigli su come poter effettuare questo lavoro direttamente qui su R
 
 shp.train <- shapefile("trainingPoints_5cl_TRAINING.shp")
 shp.valid <- shapefile("trainingPoints_5cl_TESTING.shp")
 
-## Etichette delle classi assegnate in fase di costruzione del TS alle clasis 
+## Assegnazione delle etichette delle classi assegnate in fase di costruzione del TS alle classi del reference 
 reference <- as.factor(shp.valid$id)
 reference
 
