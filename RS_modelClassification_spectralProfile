@@ -59,7 +59,7 @@ training_points <- as(training_points,'Spatial')
 
 
 
-## Estrazione valori px del training site, in questo caso per l'img del 2014
+## Estrazione valori px del training site, in questo caso per l'img del 2014 e poi ripetuto per ogni immagine
 responseCol <- "id"
 
 dfAll = data.frame(matrix(vector(), nrow = 0, ncol = length(names(img14)) + 1))   
@@ -136,7 +136,7 @@ plot(preds_svm)
 writeRaster(preds_svm,'svm_classification_14.tif', options =c('TFW=YES'), overwrite=TRUE)
 
 
-#### Poi ho ripetuto il procedimento per le altre immagini, riestrapolando il dfAll
+#### Poi ho ripetuto il procedimento per le altre immagini, riestrapolando il dfAll per ognugna
 
 ##################################################################
 
