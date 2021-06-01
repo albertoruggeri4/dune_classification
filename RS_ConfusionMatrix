@@ -4,6 +4,178 @@
 setwd("C:/...")
 
 
+#### Prima parte del codice --> confusion matrix seguendo il tutorial del libro: [Springer Geography] Courage Kamusoko - Remote Sensing Image Classification in R (2019, Springer Singapore) - libgen.lc.pdf
+
+
+####Seconda parte del codice -->  blogs.fu-berlin.de/reseda/accuracy-statistics-in-r/
+
+
+### PRIMA PARTE  ###
+
+library(sp)
+library(rgdal)
+library(raster)
+library(reshape)
+library(grid)
+library(gridExtra)
+library(RStoolbox)
+library(caret)
+library(rasterVis)
+library(corrplot)
+library(doParallel)
+library(NeuralNetTools)
+
+setwd("C:/Presentazione_Maggio_Giugno")
+
+#Caricamento immagini
+
+##ortophoto 2017-  12 bands
+img17 <- brick('Orto_multisp_2017_cl.tif')
+
+names(img17) <- c('B1','B2','B3','B4','B5','B6','B7','B8','B9','B10','B11','B12')
+
+
+#Ortofoto 2014 - 3 bands
+img14 <- brick('Orto_2014_cl.tif')
+
+names(img14) <- c('B1','B2','B3')
+
+#World VIew 2011 - 8 bands
+img11 <- brick('WV_2011_cl.tif')
+
+names(img11)<-c('B1','B2','B3','B4','B5','B6','B7','B8')
+
+
+
+####Creazione training site
+
+#editmap()
+training_points <- shapefile ("C:/Presentazione_16_03/trainingPoints_5cl_SR.shp")
+
+
+############# Creazione firma multispettrale
+
+## Estrazione dei valori di riflettanza per ogni immagine sui training points
+ta11 <- as.data.frame(extract(img11, training_points))
+ta14 <- as.data.frame(extract(img14, training_points))
+ta17 <- as.data.frame(extract(img17, training_points))
+
+head(ta11)
+
+#Calcolo della riflettanza media (mr) per ogni classe ed ogni banda
+
+mr11 <- aggregate(ta11, list(training_points$class), mean, na.rm=TRUE)
+mr14 <- aggregate(ta14, list(training_points$class), mean, na.rm=TRUE)
+mr17 <- aggregate(ta17, list(training_points$class), mean, na.rm=TRUE)
+
+
+#rimozione prima colonna per utilizzare direttamente i nomi della classi
+
+rownames(mr11) <- mr11[,1]
+mr11 <- mr11[,1]
+mr11
+
+rownames(mr14) <- mr14[,1]
+mr14 <- mr14[,1]
+mr14
+
+rownames(mr17) <- mr17[,1]
+mr17 <- mr17[,1]
+mr17
+
+
+#creazione colorPalette
+mycolor <- c('darkgoldenrod1','yellow1','darkgreen','chartreuse','darkorange')
+
+#trasformazione dataframe in matrici
+
+mr11 <- as.matrix(mr11)
+mr14 <- as.matrix(mr14)
+mr17 <- as.matrix(mr17)
+
+#spectral profile 2011
+
+plot(0, ylim=c(0.1, 1.0), xlim = c(1,9), type='n',
+     xlab="Bands", ylab="Reflectance")
+for (i in 1:nrow(mr11)){
+  lines(mr11[i,], type = "l", lwd = 3, lty = 1,
+        col = mycolor[i])}
+title(main="Spectral Profile 2011 orthophoto", font.main = 2)
+legend("topleft", rownames(mr11),
+       cex=0.8, col=mycolor, lty=1, lwd=3, bty="n")
+
+#######..... ERRORE USA ALTRO METODO
+
+##Step 5 ## Create a data frame with labeled training points containing all reflectance values
+
+training_points@data=data.frame(training_points@data, ta11[match(rownames(training_points@data), rownames(ta11)),])
+
+#check NA
+summary(training_points@data)
+
+training_points@data <- na.omit(training_points@data)
+complete.cases(training_points@data)
+
+## STEP 6 ###Prepare training and test data sets
+
+hre_seed <- 27   #valore predefinito per far sì che i risultati siano ripetibili
+set.seed(hre_seed)
+
+# Divisione training data in training e test
+#caret
+
+inTraining <- createDataPartition(training_points@data$class,p= .80, list=FALSE)
+training <- training_points@data[inTraining,]
+testing <- training_points@data[-inTraining,]
+
+#controllo dati
+summary(training)
+
+summary(testing)
+
+##... graphic visualization, band correlation etc
+
+
+###### Set-up model tuning parameters
+# parametri di ottimizzazione del modello
+# method = metodi di ricampionamento come repeatedcv, boot, cv, LOOCV
+#repeatedcv = cross-validation   ---- number= numero di iterazioni di ricampionamento
+# repeats = numero di ripetizioni del cross-validation 
+fitControl <- trainControl(method = 'repeatedcv', number =5, repeats =5)
+
+
+##knn classification
+#       class= attributi del nostro classificatore
+#       data= predictor variables
+#       trControl= tune control specificato preccedentemente
+set.seed(hre_seed)
+knnFit <- train(class~ ., data = training,
+                  method = "kknn",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl)
+
+print(knnFit)
+
+plot(knnFit)
+
+#check the parameters of the best model
+knnFit$finalModel
+
+#Next, let’s display variable importance using the varImp() function.
+knn_varImp <- varImp(knnFit, compete = FALSE)
+plot(knn_varImp)
+
+# Costruzione della previsione con i dati di testing
+pred_knnFit<- predict(knnFit, newdata = testing)
+
+confusionMatrix(data = pred_knnFit, testing$class)
+###Errore: `data` and `reference` should be factors with the same levels.
+###PAGINA 106
+
+
+######################### SECONDA PARTE   ##########
+
+
 ### Codice ripreso da questo tutorial : blogs.fu-berlin.de/reseda/accuracy-statistics-in-r/
 
 library(raster)
